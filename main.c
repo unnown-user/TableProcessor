@@ -181,11 +181,11 @@ static void print_spreadsheet(Sheet* s) {
 
 
 int main(int argc, char** argv) {
-    char* input_file = NULL;
-    char* output_file = NULL;
-    int eval_only = 0;
-    char** set_commands = NULL;
-    int set_count = 0;
+    char* input_file = NULL;       // input CSV file
+    char* output_file = NULL;      // output CSV file
+    int eval_only = 0;             // Flag: print result or not
+    char** set_commands = NULL;    // array of --set commands
+    int set_count = 0;             // number of --set commands
 
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];

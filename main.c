@@ -275,7 +275,8 @@ int main(int argc, char** argv) {
             char** new_commands = (char**)realloc(set_commands, (set_count + 1) * sizeof(char*));
             if (!new_commands) {
                 fprintf(stderr, "Error: Memory allocation failed\n");
-                for (int j = 0; j < set_count; j++) free(set_commands[j]);
+                for (int j = 0; j < set_count; j++)
+                    free(set_commands[j]);
                 free(set_commands);
                 if (input_file)
                     free(input_file);

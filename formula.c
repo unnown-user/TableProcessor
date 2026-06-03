@@ -7,28 +7,6 @@
 #include <math.h>
 
 
-struct Formula {
-    NodeType type;
-    union {
-        double number;
-        struct {
-            int row;
-            int col;
-        } cell;
-        struct {
-            int r1, c1, r2, c2;
-        } range;
-        struct {
-            Formula* left;
-            Formula* right;
-        } binary;
-        struct {
-            Formula* child;
-        } unary;
-    };
-};
-
-
 static Formula* node_number(double val) {
     Formula* f = (Formula*)malloc(sizeof(Formula));
     if (!f)
@@ -363,10 +341,16 @@ double formula_evaluate(Formula* f, void* ctx) {
     case NODE_MUL:
         return formula_evaluate(f->binary.left, ctx) * formula_evaluate(f->binary.right, ctx);
     case NODE_DIV: {
+        double left = formula_evaluate(f->binary.left, ctx);
         double right = formula_evaluate(f->binary.right, ctx);
-        if (right == 0.0)
-            return 0.0;
-        return formula_evaluate(f->binary.left, ctx) / right;
+        if (right == 0.0) {
+            if (left == 0.0)
+                return NAN;
+            if (left > 0)
+                return INFINITY;
+            return -INFINITY;
+        }
+        return left / right;
     }
     case NODE_FUNC_SUM: {
         Formula* range = f->unary.child;

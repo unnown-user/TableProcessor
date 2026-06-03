@@ -125,9 +125,9 @@ static Formula* parse_primary(const char** s) {
             ref[i++] = *(*s)++;
         ref[i] = '\0';
 
-        if (strcmp(ref, "SUM") == 0 || strcmp(ref, "sum") == 0 ||
-            strcmp(ref, "MIN") == 0 || strcmp(ref, "min") == 0 ||
-            strcmp(ref, "MAX") == 0 || strcmp(ref, "max") == 0) {
+        if ((toupper(ref[0]) == 'S' && toupper(ref[1]) == 'U' && toupper(ref[2]) == 'M') ||
+            (toupper(ref[0]) == 'M' && toupper(ref[1]) == 'A' && toupper(ref[2]) == 'X') ||
+            (toupper(ref[0]) == 'M' && toupper(ref[1]) == 'I' && toupper(ref[2]) == 'N')) {
             skip_spaces(s);
             if (**s == '(') {
                 (*s)++;
@@ -161,10 +161,10 @@ static Formula* parse_primary(const char** s) {
                     (*s)++;
 
                 NodeType func_type;
-                if (strcmp(ref, "SUM") == 0 || strcmp(ref, "sum") == 0)
+                if (toupper(ref[0]) == 'S' && toupper(ref[1]) == 'U' && toupper(ref[2]) == 'M')
                     func_type = NODE_FUNC_SUM;
                 else {
-                    if (strcmp(ref, "MIN") == 0 || strcmp(ref, "min") == 0)
+                    if (toupper(ref[0]) == 'M' && toupper(ref[1]) == 'I' && toupper(ref[2]) == 'N')
                         func_type = NODE_FUNC_MIN;
                     else
                         func_type = NODE_FUNC_MAX;

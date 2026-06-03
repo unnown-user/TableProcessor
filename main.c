@@ -162,17 +162,14 @@ static void print_spreadsheet(Sheet* s) {
 
     for (int i = 0; i <= max_row; i++) {
         for (int j = 0; j <= max_col; j++) {
-            double val = sheet_get_cell_value(s, i, j);
             const char* raw = sheet_get_cell_raw(s, i, j);
 
             if (j > 0)
                 printf(",");
 
             if (raw && raw[0] != '\0') {
-                if (val == (int)val)
-                    printf("%d", (int)val);
-                else
-                    printf("%g", val);
+                const char* val_str = sheet_get_cell_value_str(s, i, j);
+                printf("%s", val_str);
             }
         }
         printf("\n");
@@ -181,11 +178,11 @@ static void print_spreadsheet(Sheet* s) {
 
 
 int main(int argc, char** argv) {
-    char* input_file = NULL;       // input CSV file
-    char* output_file = NULL;      // output CSV file
-    int eval_only = 0;             // Flag: print result or not
-    char** set_commands = NULL;    // array of --set commands
-    int set_count = 0;             // number of --set commands
+    char* input_file = NULL;      // input CSV file
+    char* output_file = NULL;     // output CSV file
+    int eval_only = 0;            // Flag: print result or not
+    char** set_commands = NULL;   // array of --set commands
+    int set_count = 0;            // number of --set commands
 
     for (int i = 1; i < argc; i++) {
         const char* arg = argv[i];

@@ -50,7 +50,6 @@ static char* read_line(FILE* f) {
     return line;
 }
 
-
 int csv_read(Sheet* s, const char* filename) {
     FILE* f = fopen(filename, "r");
     if (!f)
@@ -84,7 +83,6 @@ int csv_read(Sheet* s, const char* filename) {
     return 0;
 }
 
-
 int csv_write(Sheet* s, const char* filename) {
     FILE* f = fopen(filename, "w");
     if (!f)
@@ -116,18 +114,13 @@ int csv_write(Sheet* s, const char* filename) {
     for (int i = 0; i <= max_row; i++) {
         int printed = 0;
         for (int j = 0; j <= max_col; j++) {
-            double val = sheet_get_cell_value(s, i, j);
             const char* raw = sheet_get_cell_raw(s, i, j);
 
             if (raw && raw[0] != '\0') {
                 if (printed)
                     fprintf(f, ",");
-
-                if (val == (int)val)
-                    fprintf(f, "%d", (int)val);
-                else
-                    fprintf(f, "%g", val);
-
+                const char* val_str = sheet_get_cell_value_str(s, i, j);
+                fprintf(f, "%s", val_str);
                 printed = 1;
             }
             else {

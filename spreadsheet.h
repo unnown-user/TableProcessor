@@ -25,7 +25,7 @@ const char* sheet_get_cell_raw(Sheet* s, int row, int col);
 double sheet_get_cell_value(Sheet* s, int row, int col);
 const char* sheet_get_cell_value_str(Sheet* s, int row, int col); int sheet_evaluate(Sheet* s);
 
-void sheet_save_csv(Sheet* s, const char* filename);
+int sheet_save_csv(Sheet* s, const char* filename);
 int sheet_load_csv(Sheet* s, const char* filename);
 
 int sheet_get_rows(Sheet* s);

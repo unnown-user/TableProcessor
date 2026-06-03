@@ -501,8 +501,8 @@ const char* sheet_get_cell_raw(Sheet* s, int row, int col) {
 
 void sheet_save_csv(Sheet* s, const char* filename) {
     if (!s || !filename)
-        return;
-    csv_write(s, filename);
+        return - 1;
+    return csv_write(s, filename);
 }
 
 

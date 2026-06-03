@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 
 #define INITIAL_ROWS 100
 #define INITIAL_COLS 200
@@ -19,6 +20,7 @@ struct Cell {
     Formula* formula;    // Pointer to the formula tree
     int visited;         // Flag: has this cell already been calculated or not
     int computing;       // Flag: is this cell being calculated right now or not (to detect cycles)
+    int in_cycle;        // Flag: is the cell involved in a cyclical relationship
 };
 
 struct Sheet {
@@ -210,6 +212,7 @@ int sheet_set_cell(Sheet* s, int row, int col, const char* content) {
         new_cell->visited = 0;
         new_cell->computing = 0;
         new_cell->value = 0.0;
+        new_cell->in_cycle = 0;
     }
     else {
         char* endptr;
@@ -235,7 +238,6 @@ int sheet_set_cell(Sheet* s, int row, int col, const char* content) {
 static double eval_cell_with_state(Sheet* s, int row, int col, EvalState* state) {
     if (state->cycle_detected)
         return 0.0;
-
     if (row < 0 || row >= s->rows || col < 0 || col >= s->cols)
         return 0.0;
 
@@ -249,11 +251,17 @@ static double eval_cell_with_state(Sheet* s, int row, int col, EvalState* state)
 
     if (c->computing) {
         state->cycle_detected = 1;
+        c->in_cycle = 1;
         return 0.0;
     }
 
-    if (c->visited)
+    if (c->visited) {
+        if (state->cycle_detected && c->type == CELL_FORMULA) {
+            c->in_cycle = 1;
+            c->type = CELL_ERROR_CYCLE;
+        }
         return c->value;
+    }
 
     c->computing = 1;
     state->recursion_depth++;
@@ -269,7 +277,27 @@ static double eval_cell_with_state(Sheet* s, int row, int col, EvalState* state)
     c->computing = 0;
 
     if (!state->cycle_detected) {
-        c->value = result;
+        if (isnan(result)) {
+            c->type = CELL_ERROR_NAN;
+            c->value = 0.0;
+            c->visited = 1;
+        }
+        else {
+            if (isinf(result)) {
+                c->type = CELL_ERROR_DIVZERO;
+                c->value = result;
+                c->visited = 1;
+            }
+            else {
+                c->value = result;
+                c->visited = 1;
+            }
+        }
+    }
+    else {
+        c->in_cycle = 1;
+        c->type = CELL_ERROR_CYCLE;
+        c->value = 0.0;
         c->visited = 1;
     }
 
@@ -277,7 +305,47 @@ static double eval_cell_with_state(Sheet* s, int row, int col, EvalState* state)
 }
 
 
-int sheet_evaluate(Sheet* s) {
+static int depends_on_cycle(Formula* f, Sheet* s, EvalState* state) {
+    if (!f) return 0;
+
+    switch (f->type) {
+    case NODE_CELL: {
+        int row = f->cell.row;
+        int col = f->cell.col;
+        if (row >= 0 && row < s->rows && col >= 0 && col < s->cols) {
+            Cell* c = s->cells[row][col];
+            if (c && c->in_cycle)
+                return 1;
+        }
+        return 0;
+    }
+    case NODE_RANGE: {
+        for (int r = f->range.r1; r <= f->range.r2; r++)
+            for (int c_idx = f->range.c1; c_idx <= f->range.c2; c_idx++)
+                if (r >= 0 && r < s->rows && c_idx >= 0 && c_idx < s->cols) {
+                    Cell* c = s->cells[r][c_idx];
+                    if (c && c->in_cycle)
+                        return 1;
+                }
+        return 0;
+    }
+    case NODE_ADD:
+    case NODE_SUB:
+    case NODE_MUL:
+    case NODE_DIV:
+        return depends_on_cycle(f->binary.left, s, state) ||
+            depends_on_cycle(f->binary.right, s, state);
+    case NODE_FUNC_SUM:
+    case NODE_FUNC_MIN:
+    case NODE_FUNC_MAX:
+        return depends_on_cycle(f->unary.child, s, state);
+    default:
+        return 0;
+    }
+}
+
+
+int sheet_evaluate(Sheet * s) {
     if (!s)
         return -1;
     if (!s->eval_required)
@@ -289,6 +357,7 @@ int sheet_evaluate(Sheet* s) {
             if (c && c->type == CELL_FORMULA) {
                 c->visited = 0;
                 c->computing = 0;
+                c->in_cycle = 0;
             }
         }
 
@@ -304,15 +373,38 @@ int sheet_evaluate(Sheet* s) {
                 eval_cell_with_state(s, i, j, &state);
         }
 
-    if (state.cycle_detected)
+    if (state.cycle_detected) {
+        int changed = 1;
+        while (changed) {
+            changed = 0;
+            for (int i = 0; i < s->rows; i++)
+                for (int j = 0; j < s->cols; j++) {
+                    Cell* c = s->cells[i][j];
+                    if (c && c->type == CELL_FORMULA && !c->in_cycle) {
+                        Formula* f = c->formula;
+                        if (f && depends_on_cycle(f, s, &state)) {
+                            c->in_cycle = 1;
+                            c->type = CELL_ERROR_CYCLE;
+                            c->value = 0.0;
+                            changed = 1;
+                        }
+                    }
+                }
+        }
+
         for (int i = 0; i < s->rows; i++)
             for (int j = 0; j < s->cols; j++) {
                 Cell* c = s->cells[i][j];
-                if (c && c->type == CELL_FORMULA) {
+                if (c && c->type == CELL_FORMULA && c->in_cycle) {
+                    c->type = CELL_ERROR_CYCLE;
                     c->value = 0.0;
-                    c->visited = 0;
+                }
+                else {
+                    if (c && c->type == CELL_FORMULA && !c->visited)
+                        c->value = 0.0;
                 }
             }
+    }
 
     s->eval_required = 0;
     return state.cycle_detected ? -1 : 0;
@@ -322,13 +414,78 @@ int sheet_evaluate(Sheet* s) {
 double sheet_get_cell_value(Sheet* s, int row, int col) {
     if (!s)
         return 0.0;
+    if (row >= s->rows || col >= s->cols)
+        return 0.0;
+    Cell* c = s->cells[row][col];
+    if (!c)
+        return 0.0;
 
-    EvalState state;
-    state.sheet = s;
-    state.cycle_detected = 0;
-    state.recursion_depth = 0;
+    switch (c->type) {
+    case CELL_NUMBER:
+        return c->value;
+    case CELL_FORMULA:
+        if (c->visited)
+            return c->value;
+        else {
+            EvalState state;
+            state.sheet = s;
+            state.cycle_detected = 0;
+            state.recursion_depth = 0;
+            return eval_cell_with_state(s, row, col, &state);
+        }
+    case CELL_ERROR_CYCLE:
+        return 0.0;
+    case CELL_ERROR_DIVZERO:
+        return c->value;
+    case CELL_ERROR_NAN:
+        return 0.0;
+    default:
+        return 0.0;
+    }
+}
 
-    return eval_cell_with_state(s, row, col, &state);
+
+const char* sheet_get_cell_value_str(Sheet* s, int row, int col) {
+    if (!s)
+        return "";
+    if (row < 0 || row >= s->rows || col < 0 || col >= s->cols)
+        return "";
+    Cell* c = s->cells[row][col];
+    if (!c)
+        return "";
+
+    switch (c->type) {
+    case CELL_NUMBER: {
+        static char buffer[64];
+        double val = c->value;
+        if (val == (int)val)
+            snprintf(buffer, sizeof(buffer), "%d", (int)val);
+        else
+            snprintf(buffer, sizeof(buffer), "%g", val);
+        return buffer;
+    }
+    case CELL_FORMULA: {
+        static char buffer[64];
+        double val = sheet_get_cell_value(s, row, col);
+        if (val == (int)val)
+            snprintf(buffer, sizeof(buffer), "%d", (int)val);
+        else
+            snprintf(buffer, sizeof(buffer), "%g", val);
+        return buffer;
+    }
+    case CELL_ERROR_CYCLE:
+        return "CYCLE";
+    case CELL_ERROR_DIVZERO:
+        if (c->value > 0)
+            return "+INF";
+        if (c->value < 0)
+            return "-INF";
+        return "INF";
+    case CELL_ERROR_NAN:
+        return "NaN";
+    default:
+        return "";
+    }
 }
 
 

@@ -345,8 +345,8 @@ int main(int argc, char** argv) {
             for (int j = 0; j < set_count; j++)
                 free(set_commands[j]);
             free(set_commands);
-            if (input_file)
-                free(input_file);
+
+            free(input_file);
             if (output_file)
                 free(output_file);
             return 1;
@@ -384,7 +384,18 @@ int main(int argc, char** argv) {
     }
 
     if (output_file) {
-        sheet_save_csv(s, output_file);
+        if (sheet_save_csv(s, output_file) != 0) {
+            fprintf(stderr, "Error: Cannot write to output file '%s'\n", output_file);
+            sheet_destroy(s);
+            for (int j = 0; j < set_count; j++)
+                free(set_commands[j]);
+            free(set_commands);
+
+            if (input_file)
+                free(input_file);
+            free(output_file);
+            return 1;
+        }
         printf("Saved result to %s\n", output_file);
     }
 
